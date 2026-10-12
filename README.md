@@ -1,5 +1,11 @@
 # Bài cá nhân — K4 Track 2 Day 24: Data Governance & Security (L3)
 
+**Sinh viên:** Trần Thu Phương · **Mã sinh viên:** 02366.
+
+Để tạo lại bằng chứng synthetic trên máy của bạn sau khi cài dependency và
+Gitleaks theo hướng dẫn dưới đây, chạy `python -m scripts.replay_evidence`.
+Lệnh này chỉ dùng sink `127.0.0.1:10024`; kết quả nằm trong `reports/`.
+
 **Lớp L3 · dự kiến 12/10/2026 · 120 phút trên lớp.** Repo này là đề bài cho sinh viên; bốn control trong `agent/` là scaffold, không phải đáp án. Bài dùng dữ liệu tổng hợp và được chấm bằng `--mock`, không cần API key, cloud hay GPU.
 
 Bạn sẽ tự gây rò rỉ PII ở agent chưa có kiểm soát, viết PII gate, policy, trifecta split và ledger, rồi chứng minh cùng payload đã bị chặn. Hai checkpoint L3 bổ sung là **agent hành động thay người dùng (OBO)** và **supply chain & secrets**. Mục tiêu là giữ chức năng hợp lệ cho `dpo` trong khi `support_l1` không đọc record chứa CCCD/STK.

@@ -1,9 +1,11 @@
-Đánh giá tác động dữ liệu
+# DPIA-lite — Trần Thu Phương (02366)
 
-Ticket là dữ liệu nội bộ và có thể chứa chỉ thị do người khác viết Hồ sơ trong data/customers.json là dữ liệu hạn chế vì có CCCD số điện thoại tài khoản và email dù mọi thông tin đều là dữ liệu giả
+| Mục | Đánh giá trong bài lab |
+|---|---|
+| Dữ liệu | `corpus/` chứa ticket do bên ngoài viết; `data/customers.json` chứa hồ sơ synthetic có CCCD, STK, điện thoại và email. |
+| Mục đích | Tóm tắt ticket; principal `dpo` có thể đọc hồ sơ gắn với ticket cho `support-reply`. |
+| Luồng xử lý | Run A đọc ticket, lấy số ticket từ tên file và che PII trước khi tóm tắt (`agent/runner.py:129`–`:142`). Run B dùng `related_tickets` của kho khách hàng để xác định hồ sơ và kiểm quyền trước khi gọi `read_customer` (`agent/runner.py:79`–`:91`). |
+| Nơi đi | Sink chỉ nghe `127.0.0.1:10024` (`agent/tools.py:68`). Trước containment có bốn POST trong `reports/attack-before.log`; sau replay không có POST trong `reports/attack-after.log`. |
+| Kiểm soát | `agent/policy.py:60` từ chối restricted + egress, kiểm principal, purpose, scope, delegation và TTL. `agent/ledger.py:49` ghi decision/reason với hash chain. |
 
-Run A chỉ đọc ticket rồi lấy số ticket từ tên file và che PII trước khi tóm tắt Run B chỉ nhận số ticket để tìm khách liên quan trong data/customers.json và kiểm quyền trước mỗi lần đọc Vì vậy support_l1 không mở được hồ sơ còn dpo vẫn xử lý được ticket hợp lệ
-
-Khi ticket đòi gửi dữ liệu thì runner kiểm riêng lời gọi http_post với phân loại restricted và egress_enabled=True Ledger ghi lý do từ chối còn reports/attack-after.log rỗng dù reports/attack-before.log có bốn lần gửi trước khi sửa
-
-Kết quả này chỉ đúng trong bài lab dùng dữ liệu giả Tìm kiếm theo từ khóa có thể trả về nhiều hồ sơ hơn cần thiết regex có thể bỏ sót PII và ledger một file không tự phát hiện được việc xóa dòng cuối
+Giới hạn: `--as` chỉ mô phỏng principal, không xác thực người thật. Regex trong `agent/pii.py` có thể bỏ sót biến thể PII. Tìm kiếm bằng từ khóa có thể trả về nhiều ticket; mapping `related_tickets` có thể đọc nhiều hồ sơ hợp lệ hơn cần thiết. Hash chain chỉ phát hiện sửa trong chuỗi đang còn; nó không tự phát hiện cắt dòng cuối hoặc viết lại toàn bộ chuỗi. Kết quả trên dữ liệu giả không chứng minh tuân thủ pháp luật khi triển khai thật.
