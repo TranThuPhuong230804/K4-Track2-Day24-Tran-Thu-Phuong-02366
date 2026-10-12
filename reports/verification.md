@@ -16,6 +16,6 @@ Ngày 12/10/2026, chạy trên Windows với Python 3.11.14 trong `.venv`, pytes
 
 `reports/attack-before.log` và `reports/attack-after.log` được tạo lại bằng `scripts/replay_evidence.py` trên sink `127.0.0.1:10024`; file sau rỗng. `reports/ledger.jsonl` được tạo lại từ tám replay có hai principal. Các test dùng sink và ledger riêng, nên log replay không bị lấy nhầm từ pytest.
 
-Nguồn gốc: commit `ba8581b` đã đồng bộ code, lure và báo cáo từ repo tham khảo `hugebenevolence/K4-L3-DAY24-TranDainhan-2A202602642` (commit `3c0303c`). Phiên này đã chạy lại checkpoint, tạo script replay, tái tạo evidence và viết lại báo cáo. Theo `RULES.md`, người nộp cần tự hiểu và giải thích từng control; phần code đã tham khảo không nên được trình bày là tự viết độc lập.
+Nguồn gốc: commit `ba8581b` từng đồng bộ code, lure và báo cáo từ repo tham khảo `hugebenevolence/K4-L3-DAY24-TranDainhan-2A202602642` (commit `3c0303c`). Sau đó bốn control trong `agent/`, ba lure mới và các báo cáo được viết lại theo checkpoint; test và evidence được tạo lại trên phiên bản cuối. Lịch sử Git vẫn ghi việc tham khảo này. Theo `RULES.md`, người nộp cần tự hiểu và giải thích từng control, và không nên trình bày phần đã tham khảo là tự viết độc lập.
 
 Giới hạn còn lại: regex PII mới được đo trên tập giả; `--as` chỉ giả lập quyền; ledger không chống cắt đuôi nếu thiếu mốc tin cậy ngoài file. Windows native không phải môi trường pilot của đề bài, nên kết quả cần đối chiếu thêm trên WSL2/Linux nếu lớp yêu cầu.

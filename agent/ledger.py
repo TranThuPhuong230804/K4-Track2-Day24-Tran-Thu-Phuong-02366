@@ -42,38 +42,50 @@ import json
 from pathlib import Path
 
 
-def _hash(entry: dict) -> str:
-    return hashlib.sha256(json.dumps(entry, sort_keys=True).encode("utf-8")).hexdigest()
+_REQUIRED = {"ts", "agent_id", "run_id", "tool", "args_hash",
+             "classification", "decision", "reason"}
+_GENESIS = "0" * 64
+
+
+def _digest(fields: dict) -> str:
+    encoded = json.dumps(fields, sort_keys=True).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def append(entry: dict, path: Path) -> dict:
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    prev_hash = "0" * 64
-    if path.exists():
-        lines = path.read_text(encoding="utf-8").splitlines()
-        if lines:
-            prev_hash = json.loads(lines[-1])["hash"]
-    record = {**entry, "prev_hash": prev_hash}
-    record["hash"] = _hash(record)
-    with path.open("a", encoding="utf-8") as stream:
-        stream.write(json.dumps(record, ensure_ascii=False) + "\n")
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    previous = _GENESIS
+    if destination.exists() and destination.stat().st_size:
+        if not verify(destination):
+            raise ValueError("cannot extend an invalid audit chain")
+        previous = json.loads(destination.read_text(encoding="utf-8").splitlines()[-1])["hash"]
+
+    record = {key: value for key, value in entry.items()
+              if key not in {"hash", "prev_hash"}}
+    record["prev_hash"] = previous
+    record["hash"] = _digest(record)
+    with destination.open("a", encoding="utf-8") as output:
+        output.write(json.dumps(record, ensure_ascii=False) + "\n")
     return record
 
 
 def verify(path: Path) -> bool:
     try:
-        previous = "0" * 64
-        lines = Path(path).read_text(encoding="utf-8").splitlines()
-        if not lines:
+        rows = Path(path).read_text(encoding="utf-8").splitlines()
+        if not rows:
             return False
-        for line in lines:
-            record = json.loads(line)
-            stored_hash = record.pop("hash")
-            if (not record.get("reason") or record.get("prev_hash") != previous
-                    or stored_hash != _hash(record)):
+        previous = _GENESIS
+        for row in rows:
+            stored = json.loads(row)
+            if not isinstance(stored, dict) or not _REQUIRED.issubset(stored):
                 return False
-            previous = stored_hash
+            if not isinstance(stored["reason"], str) or not stored["reason"].strip():
+                return False
+            actual_hash = stored.pop("hash")
+            if stored.get("prev_hash") != previous or actual_hash != _digest(stored):
+                return False
+            previous = actual_hash
         return True
     except (OSError, ValueError, KeyError, TypeError):
         return False

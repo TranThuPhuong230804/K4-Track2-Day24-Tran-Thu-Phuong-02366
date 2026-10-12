@@ -33,27 +33,33 @@ from __future__ import annotations
 import re
 
 
-_EMAIL = re.compile(r"(?<![\w@])[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}(?![\w@])")
-_BANK = re.compile(r"(?i)(?:\bSTK\b|số tài khoản)\s*[:#-]?\s*(\d{8,16})(?!\d)")
-_CCCD = re.compile(r"(?<!\d)\d{12}(?!\d)")
-_PHONE = re.compile(r"(?<!\d)0\d{9,10}(?!\d)")
+_RECOGNIZERS = (
+    ("EMAIL", re.compile(r"(?<![\w@])[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}(?![\w@])"), 0),
+    ("VN_BANK_ACCOUNT", re.compile(
+        r"(?:\bSTK\b|số tài khoản)\s*[:#-]?\s*(\d{8,16})(?!\d)", re.I), 1),
+    ("VN_CCCD", re.compile(r"(?<!\d)\d{12}(?!\d)"), 0),
+    ("VN_PHONE", re.compile(r"(?<!\d)0(?:[ -]?\d){9,10}(?!\d)"), 0),
+)
 
 
 def detect(text: str) -> list[dict]:
-    found: list[dict] = []
-    # Labeled bank numbers take priority over equal-length CCCD/phone matches.
-    for kind, pattern in (("EMAIL", _EMAIL), ("VN_BANK_ACCOUNT", _BANK),
-                          ("VN_CCCD", _CCCD), ("VN_PHONE", _PHONE)):
+    """Return non-overlapping spans, prioritizing explicitly labelled accounts."""
+    spans: list[dict] = []
+    for kind, pattern, group in _RECOGNIZERS:
         for match in pattern.finditer(text):
-            start, end = match.span(1) if kind == "VN_BANK_ACCOUNT" else match.span()
-            if any(start < item["end"] and item["start"] < end for item in found):
+            start, end = match.span(group)
+            if any(start < prior["end"] and prior["start"] < end for prior in spans):
                 continue
-            found.append({"type": kind, "start": start, "end": end})
-    return sorted(found, key=lambda item: item["start"])
+            spans.append({"type": kind, "start": start, "end": end})
+    spans.sort(key=lambda span: span["start"])
+    return spans
 
 
 def redact(text: str) -> str:
-    for entity in reversed(detect(text)):
-        text = (text[:entity["start"]] + f"[REDACTED_{entity['type']}]"
-                + text[entity["end"]:])
-    return text
+    pieces = []
+    cursor = 0
+    for entity in detect(text):
+        pieces.extend((text[cursor:entity["start"]], f"[REDACTED_{entity['type']}]"))
+        cursor = entity["end"]
+    pieces.append(text[cursor:])
+    return "".join(pieces)

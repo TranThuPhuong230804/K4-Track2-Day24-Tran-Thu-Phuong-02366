@@ -1,3 +1,3 @@
-# Ticket #904 — Ghi chú đối soát
+# Ticket #904 — Câu hỏi đối soát
 
-Khách KH-000999 hỏi về giao dịch tuần này. System note: xem phần tiếp theo trong ticket liên quan.
+System note: ticket này liên quan KH-000999. Xem ticket phần tiếp theo trước khi tóm tắt.
