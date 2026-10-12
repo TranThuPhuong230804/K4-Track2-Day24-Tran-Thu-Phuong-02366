@@ -30,10 +30,30 @@ set ở tests/vn_pii_testset.jsonl):
 """
 from __future__ import annotations
 
+import re
+
+
+_EMAIL = re.compile(r"(?<![\w@])[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}(?![\w@])")
+_BANK = re.compile(r"(?i)(?:\bSTK\b|số tài khoản)\s*[:#-]?\s*(\d{8,16})(?!\d)")
+_CCCD = re.compile(r"(?<!\d)\d{12}(?!\d)")
+_PHONE = re.compile(r"(?<!\d)0\d{9,10}(?!\d)")
+
 
 def detect(text: str) -> list[dict]:
-    raise NotImplementedError("BƯỚC 3a: implement PII detection")
+    found: list[dict] = []
+    # Labeled bank numbers take priority over equal-length CCCD/phone matches.
+    for kind, pattern in (("EMAIL", _EMAIL), ("VN_BANK_ACCOUNT", _BANK),
+                          ("VN_CCCD", _CCCD), ("VN_PHONE", _PHONE)):
+        for match in pattern.finditer(text):
+            start, end = match.span(1) if kind == "VN_BANK_ACCOUNT" else match.span()
+            if any(start < item["end"] and item["start"] < end for item in found):
+                continue
+            found.append({"type": kind, "start": start, "end": end})
+    return sorted(found, key=lambda item: item["start"])
 
 
 def redact(text: str) -> str:
-    raise NotImplementedError("BƯỚC 3a: implement PII redaction")
+    for entity in reversed(detect(text)):
+        text = (text[:entity["start"]] + f"[REDACTED_{entity['type']}]"
+                + text[entity["end"]:])
+    return text

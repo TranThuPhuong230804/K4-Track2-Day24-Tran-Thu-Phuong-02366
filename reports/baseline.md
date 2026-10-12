@@ -1,5 +1,5 @@
-# Baseline — điền trong checkpoint 1
+Báo cáo ban đầu
 
-1. Agent có identity mỗi run chưa? Dẫn file/hàm:
-2. Ai cho phép `http_post`? Dẫn file/hàm:
-3. Nếu gửi sai PII ra sink, bằng chứng ở đâu? Dẫn file/hàm:
+Trước khi sửa runner thì agent đọc ticket và làm theo chỉ thị trong đó mà chưa kiểm quyền của người yêu cầu
+
+Khi thử bốn lure riêng biệt thì luồng cũ đều đọc hồ sơ giả của KH-000999 rồi gửi tới sink trên máy cục bộ Bốn lần gửi này nằm trong reports/attack-before.log

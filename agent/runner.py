@@ -59,7 +59,14 @@ Interface bắt buộc (agent/loop.py import và gọi hàm này nếu tồn t�
 """
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+import hashlib
+import json
 from pathlib import Path
+import re
+from uuid import uuid4
+
+from agent import ledger, pii, policy, tools
 
 REPORTS_DIR = Path(__file__).resolve().parent.parent / "reports"
 DEFAULT_LEDGER_PATH = REPORTS_DIR / "ledger.jsonl"
@@ -69,6 +76,74 @@ class RunnerScaffoldPending(NotImplementedError):
     """Only the original 3c stub uses this to enable the CP1/CP2 baseline."""
 
 
+def _read_related_customers(ticket_ids: set[int], decide) -> None:
+    """Run B accepts only ticket numbers from validated filenames."""
+    if not ticket_ids or not decide("read_customer", sorted(ticket_ids), "restricted",
+                                    "support-reply", "run-b", ("read_customer",)):
+        return
+    customers = json.loads(tools.CUSTOMERS_FILE.read_text(encoding="utf-8"))
+    for customer in customers:
+        if not ticket_ids.intersection(customer["related_tickets"]):
+            continue
+        customer_id = customer["customer_id"]
+        if decide("read_customer", customer_id, "restricted", "support-reply",
+                  "run-b", ("read_customer",)):
+            tools.read_customer(customer_id)
+
+
 def handle(message: str, llm, log_dir: Path | None = None,
            principal_id: str = "support_l1") -> str:
-    raise RunnerScaffoldPending("BƯỚC 3c: implement trifecta split")
+    ledger_path = (Path(log_dir) if log_dir is not None else REPORTS_DIR) / "ledger.jsonl"
+    run_token = uuid4().hex
+    expires_at = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
+
+    def decide(tool: str, args: object, classification: str, purpose: str,
+               run: str, scopes: tuple[str, ...], egress: bool = False) -> bool:
+        context = policy.PolicyContext(
+            data_classification=classification,
+            request_purpose=purpose,
+            agent_owner=f"lab24-agent/{run}",
+            delegation_depth=0,
+            egress_enabled=egress,
+            principal_id=principal_id,
+            requested_tool=tool,
+            agent_scopes=scopes,
+            expires_at=expires_at,
+        )
+        allow, reason = policy.check(context)
+        args_hash = hashlib.sha256(json.dumps(args, sort_keys=True).encode("utf-8")).hexdigest()
+        ledger.append({
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "agent_id": context.agent_owner,
+            "run_id": f"{run_token}/{run}",
+            "tool": tool,
+            "args_hash": args_hash,
+            "classification": classification,
+            "decision": "allow" if allow else "deny",
+            "reason": reason,
+            "on_behalf_of": principal_id,
+            "expires_at": expires_at,
+        }, ledger_path)
+        return allow
+
+    # Run A sees untrusted ticket text. Only validated filename IDs cross to Run B.
+    if not decide("search_docs", message, "internal", "summarize-tickets",
+                  "run-a", ("search_docs",)):
+        return llm.summarize([])
+    docs = tools.search_docs(message)
+    ticket_ids = {
+        int(match.group(1))
+        for doc in docs
+        if (match := re.fullmatch(r"ticket-(\d+)\.md", doc["id"]))
+    }
+    injected = llm.find_injection("\n\n".join(doc["text"] for doc in docs))
+    safe_docs = [{"id": doc["id"], "text": pii.redact(doc["text"])} for doc in docs]
+
+    _read_related_customers(ticket_ids, decide)
+
+    if injected is not None:
+        # The URL is the only argument considered. No private record reaches this check.
+        if decide("http_post", injected.target_url, "restricted", "support-reply",
+                  "run-egress", ("http_post",), egress=True):
+            tools.http_post(injected.target_url, {})
+    return llm.summarize(safe_docs)

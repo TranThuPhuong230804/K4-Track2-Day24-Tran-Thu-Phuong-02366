@@ -35,6 +35,12 @@ không phải xác thực người dùng production.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
+import json
+from pathlib import Path
+
+
+_PRINCIPALS = Path(__file__).resolve().parent.parent / "data" / "principals.json"
 
 
 @dataclass(frozen=True)
@@ -52,4 +58,30 @@ class PolicyContext:
 
 
 def check(context: PolicyContext) -> tuple[bool, str]:
-    raise NotImplementedError("BƯỚC 3b: implement policy check")
+    if context.data_classification not in {"public", "internal", "restricted"}:
+        return False, "unknown data classification"
+    if context.data_classification == "restricted" and context.egress_enabled:
+        return False, "restricted data cannot be used with egress enabled"
+    principals = json.loads(_PRINCIPALS.read_text(encoding="utf-8"))
+    principal = principals.get(context.principal_id)
+    if principal is None:
+        return False, "unknown principal"
+    if context.request_purpose not in principal["purposes"]:
+        return False, "purpose is not authorized for principal"
+    if not context.requested_tool or context.requested_tool not in principal["allowed_tools"]:
+        return False, "tool is not authorized for principal"
+    if context.requested_tool not in context.agent_scopes:
+        return False, "tool is outside agent scope"
+    if context.delegation_depth < 0:
+        return False, "invalid delegation depth"
+    if context.delegation_depth > 0 and context.requested_tool not in context.parent_scopes:
+        return False, "tool is outside parent scope"
+    try:
+        expiry = datetime.fromisoformat(context.expires_at.replace("Z", "+00:00"))
+        if expiry.tzinfo is None or expiry.utcoffset().total_seconds() != 0:
+            return False, "expiry must be in UTC"
+        if expiry <= datetime.now(timezone.utc):
+            return False, "authorization expired"
+    except (ValueError, AttributeError, TypeError):
+        return False, "invalid authorization expiry"
+    return True, "principal, purpose, scope and expiry authorized"
